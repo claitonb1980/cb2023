@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinal Modem Celular</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{background:#0f1117;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:12px}
+
+.panel{display:flex;flex-direction:column;height:100%;overflow:hidden}
+
+.header{background:#1a1d2e;border-bottom:1px solid #2d3148;padding:10px 12px;flex-shrink:0}
+.header h1{font-size:13px;font-weight:700;color:#7c83f7}
+.header .sub{font-size:10px;color:#64748b;margin-top:2px}
+
+.filters{background:#131520;border-bottom:1px solid #2d3148;padding:8px 10px;flex-shrink:0;display:flex;flex-direction:column;gap:6px}
+.f-row{display:flex;gap:6px;align-items:flex-end}
+.f-group{display:flex;flex-direction:column;gap:2px;flex:1}
+.f-label{font-size:9px;color:#64748b;text-transform:uppercase}
+input[type=date],select{background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;padding:5px 6px;border-radius:5px;font-size:11px;width:100%}
+input[type=date]:focus,select:focus{outline:none;border-color:#7c83f7}
+.btn{padding:6px 12px;border-radius:5px;border:none;font-size:11px;font-weight:600;cursor:pointer;width:100%}
+.btn-primary{background:#7c83f7;color:#fff}
+.btn-primary:hover{background:#6366f1}
+.btn-primary:disabled{background:#2d3148;color:#64748b;cursor:not-allowed}
+.btn-clear{background:#1a1d2e;color:#94a3b8;border:1px solid #2d3148;margin-top:4px}
+.btn-clear:hover{border-color:#ef4444;color:#ef4444}
+
+.loading{display:none;align-items:center;gap:6px;font-size:11px;color:#7c83f7;padding:6px 10px}
+.loading.show{display:flex}
+.spinner{width:14px;height:14px;border:2px solid #2d3148;border-top-color:#7c83f7;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-bar{display:none;background:#7f1d1d;padding:6px 10px;font-size:11px;color:#fca5a5;flex-shrink:0}
+.error-bar.show{display:block}
+
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:8px 10px;flex-shrink:0;border-bottom:1px solid #2d3148}
+.kpi{background:#1a1d2e;border-radius:5px;padding:6px 8px;text-align:center}
+.kpi .val{font-size:16px;font-weight:700;color:#38bdf8}
+.kpi .lbl{font-size:9px;color:#64748b;text-transform:uppercase}
+
+.trips-list{flex:1;overflow-y:auto;padding:6px}
+.list-empty{color:#64748b;font-size:11px;text-align:center;padding:20px 8px;line-height:1.6}
+
+.vehicle-group{margin-bottom:5px}
+.vehicle-header{background:#252844;border-radius:5px;padding:7px 9px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-left:3px solid transparent;transition:all 0.2s;user-select:none}
+.vehicle-header:hover{background:#2d3148}
+.vehicle-header.active{border-left-color:#7c83f7;background:#2d3148}
+.vehicle-name{font-weight:700;color:#e2e8f0;font-size:11px}
+.vehicle-sub{font-size:9px;color:#64748b}
+
+.trip-item{margin:2px 0 2px 6px;padding:6px 8px;background:#0f1117;border-radius:4px;cursor:pointer;border:1px solid transparent;transition:all 0.15s}
+.trip-item:hover{border-color:#7c83f7;background:#1a1d2e}
+.trip-item.active{border-color:#7c83f7;background:#1a1d2e}
+.trip-row{display:flex;justify-content:space-between;margin-bottom:2px;font-size:10px}
+.trip-time{color:#94a3b8}
+.sig-bar{height:4px;border-radius:2px;margin-top:3px;background:#1a1d2e}
+.sig-bar-inner{height:100%;border-radius:2px}
+
+.legend{padding:8px 10px;border-top:1px solid #2d3148;flex-shrink:0}
+.leg-title{font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:4px}
+.leg-row{display:flex;align-items:center;gap:5px;margin:2px 0;color:#cbd5e1;font-size:10px}
+.leg-sw{width:16px;height:3px;border-radius:2px;flex-shrink:0}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:#0f1117}
+::-webkit-scrollbar-thumb{background:#2d3148;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="panel">
+
+  <div class="header">
+    <div class="h1">Sinal Modem Celular</div>
+    <div class="sub" id="sub-info">Selecione o período e busque</div>
+  </div>
+
+  <div class="filters">
+    <div class="f-row">
+      <div class="f-group">
+        <span class="f-label">De</span>
+        <input type="date" id="dt-from"/>
+      </div>
+      <div class="f-group">
+        <span class="f-label">Até</span>
+        <input type="date" id="dt-to"/>
+      </div>
+    </div>
+    <div class="f-group">
+      <span class="f-label">Veículo</span>
+      <select id="sel-veiculo">
+        <option value="">Todos os veículos</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="btn-buscar" onclick="buscar()">Buscar</button>
+    <button class="btn btn-clear" onclick="limpar()">Limpar mapa</button>
+  </div>
+
+  <div class="loading" id="loading"><div class="spinner"></div><span id="loading-msg">Carregando...</span></div>
+  <div class="error-bar" id="error-bar"></div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="val" id="st-trips">–</div><div class="lbl">Viagens</div></div>
+    <div class="kpi"><div class="val" id="st-dist">–</div><div class="lbl">km Total</div></div>
+    <div class="kpi"><div class="val" id="st-veic">–</div><div class="lbl">Veículos</div></div>
+    <div class="kpi"><div class="val" id="st-sig">–</div><div class="lbl">Sinal Médio</div></div>
+  </div>
+
+  <div class="trips-list" id="trips-list">
+    <div class="list-empty">Configure o período e clique em <strong>Buscar</strong>.</div>
+  </div>
+
+  <div class="legend">
+    <div class="leg-title">Sinal Modem (ASU)</div>
+    <div class="leg-row"><div class="leg-sw" style="background:#22c55e"></div><span>Excelente &gt;100</span></div>
+    <div class="leg-row"><div class="leg-sw" style="background:#84cc16"></div><span>Bom 85–100</span></div>
+    <div class="leg-row"><div class="leg-sw" style="background:#f59e0b"></div><span>Regular 65–84</span></div>
+    <div class="leg-row"><div class="leg-sw" style="background:#ef4444"></div><span>Fraco &lt;65</span></div>
+    <div class="leg-row"><div class="leg-sw" style="background:#475569"></div><span>Sem sinal</span></div>
+  </div>
+
+</div>
+
+<script>
+// ─── Diagnostic IDs a tentar em ordem ─────────────────────────────────────────
+const DIAG_IDS_SINAL = [
+  'DiagnosticModemCellularSignalStrengthId',
+  'DiagnosticNetworkSignalStrengthId',
+  'a4Cq3dWtCV0yoo9j_v__LbQ'
+];
+
+// ─── Estado ────────────────────────────────────────────────────────────────────
+let svc = null;
+let veiculosData = [];
+let drawnElements = [];
+let activeVehicleId = null;
+let activeTripIdx = null;
+let diagIdUsado = null;
+
+// ─── Helpers de cor ────────────────────────────────────────────────────────────
+function sigColor(v) {
+  if (v === null || v === undefined || v === 255) return '#475569';
+  if (v > 100) return '#22c55e';
+  if (v >= 85) return '#84cc16';
+  if (v >= 65) return '#f59e0b';
+  return '#ef4444';
+}
+function sigLabel(v) {
+  if (v === null || v === undefined || v === 255) return 'Sem sinal';
+  if (v > 100) return 'Excelente';
+  if (v >= 85) return 'Bom';
+  if (v >= 65) return 'Regular';
+  return 'Fraco';
+}
+function fmtTime(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'});
+}
+function fmtTimeShort(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleTimeString('pt-BR', {timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit'});
+}
+function formatDur(mins) {
+  if (!mins || mins < 0) return '–';
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m`;
+}
+
+// ─── API helper ────────────────────────────────────────────────────────────────
+function apiCall(method, params) {
+  return new Promise((resolve, reject) => {
+    svc.api.call(method, params,
+      function(result) { resolve(result); },
+      function(err) { reject(new Error(err && err.message ? err.message : JSON.stringify(err))); }
+    );
+  });
+}
+
+// ─── Datas padrão ─────────────────────────────────────────────────────────────
+function initDatas() {
+  const hoje = new Date();
+  const semana = new Date(hoje); semana.setDate(hoje.getDate() - 7);
+  document.getElementById('dt-to').value   = hoje.toISOString().slice(0,10);
+  document.getElementById('dt-from').value = semana.toISOString().slice(0,10);
+}
+
+// ─── Popular veículos ──────────────────────────────────────────────────────────
+function popularVeiculos() {
+  svc.api.call('Get', { typeName: 'Device', search: {}, resultsLimit: 1000 },
+    function(devices) {
+      const sel = document.getElementById('sel-veiculo');
+      sel.innerHTML = '<option value="">Todos os veículos</option>';
+      devices.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.name || d.id;
+        sel.appendChild(opt);
+      });
+    },
+    function(err) { console.warn('Erro ao carregar veículos:', err); }
+  );
+}
+
+// ─── Descobrir Diagnostic ID ───────────────────────────────────────────────────
+async function descobrirDiagId(fromISO, toISO, deviceId) {
+  for (const diagId of DIAG_IDS_SINAL) {
+    try {
+      const search = { diagnosticSearch: { id: diagId }, fromDate: fromISO, toDate: toISO, resultsLimit: 1 };
+      if (deviceId) search.deviceSearch = { id: deviceId };
+      const res = await apiCall('Get', { typeName: 'StatusData', search });
+      if (res && res.length > 0) return diagId;
+    } catch(e) {}
+  }
+  return null;
+}
+
+// ─── Limpar mapa ───────────────────────────────────────────────────────────────
+function limpar() {
+  drawnElements.forEach(el => { try { el.remove(); } catch(e) {} });
+  drawnElements = [];
+  activeVehicleId = null;
+  activeTripIdx = null;
+}
+
+// ─── Desenhar rota no mapa nativo ─────────────────────────────────────────────
+function desenharRota(route, cor) {
+  if (!route || route.length < 2) return;
+
+  // Segmentos coloridos por sinal
+  for (let i = 0; i < route.length - 1; i++) {
+    const p1 = route[i], p2 = route[i+1];
+    const color = p1[2] !== null ? sigColor(p1[2]) : cor;
+
+    try {
+      const path = svc.canvas.path([
+        { type: 'M', points: [{ x: p1[1], y: p1[0] }] },
+        { type: 'L', points: [{ x: p2[1], y: p2[0] }] }
+      ], 10);
+      path.change({ stroke: color, 'stroke-width': 4, 'stroke-opacity': 0.9 });
+      drawnElements.push(path);
+    } catch(e) {}
+  }
+
+  // Marcador início (verde)
+  try {
+    const first = route[0];
+    const inicio = svc.canvas.circle({ x: first[1], y: first[0] }, 6, 20);
+    inicio.change({ fill: '#22c55e', stroke: '#fff', 'stroke-width': 2 });
+    drawnElements.push(inicio);
+  } catch(e) {}
+
+  // Marcador fim (vermelho)
+  try {
+    const last = route[route.length-1];
+    const fim = svc.canvas.circle({ x: last[1], y: last[0] }, 6, 20);
+    fim.change({ fill: '#ef4444', stroke: '#fff', 'stroke-width': 2 });
+    drawnElements.push(fim);
+  } catch(e) {}
+}
+
+function centralizarRota(route) {
+  if (!route || route.length === 0) return;
+  const lats = route.map(p => p[0]);
+  const lons = route.map(p => p[1]);
+  const bounds = {
+    swLat: Math.min(...lats), swLon: Math.min(...lons),
+    neLat: Math.max(...lats), neLon: Math.max(...lons)
+  };
+  try {
+    svc.map.setBounds(bounds);
+  } catch(e) {}
+}
+
+// ─── Busca principal ───────────────────────────────────────────────────────────
+async function buscar() {
+  if (!svc) { mostrarErro('Serviços MyGeotab não disponíveis.'); return; }
+
+  const from   = document.getElementById('dt-from').value;
+  const to     = document.getElementById('dt-to').value;
+  const veicId = document.getElementById('sel-veiculo').value;
+
+  if (!from || !to) { mostrarErro('Selecione o período.'); return; }
+
+  const fromISO = from + 'T03:00:00Z';
+  const toDate  = new Date(to); toDate.setDate(toDate.getDate() + 1);
+  const toISO   = toDate.toISOString().slice(0,19) + 'Z';
+
+  esconderErro();
+  limpar();
+  setLoading(true, 'Buscando veículos...');
+  document.getElementById('btn-buscar').disabled = true;
+  veiculosData = [];
+
+  try {
+    // 1. Devices
+    const devSearch = veicId ? { id: veicId } : {};
+    const devices = await apiCall('Get', { typeName: 'Device', search: devSearch, resultsLimit: 500 });
+    const deviceMap = {};
+    devices.forEach(d => { deviceMap[d.id] = d; });
+    const deviceIds = devices.map(d => d.id);
+
+    // 2. Diagnostic ID disponível
+    setLoading(true, 'Identificando parâmetros de sinal...');
+    diagIdUsado = await descobrirDiagId(fromISO, toISO, deviceIds[0]);
+
+    // 3. Viagens
+    setLoading(true, 'Buscando viagens...');
+    const tripSearch = { fromDate: fromISO, toDate: toISO };
+    if (veicId) tripSearch.deviceSearch = { id: veicId };
+    const trips = await apiCall('Get', { typeName: 'Trip', search: tripSearch, resultsLimit: 5000 });
+
+    const deviceIdSet = new Set(deviceIds);
+    const tripsFiltered = trips.filter(t => deviceIdSet.has(t.device?.id));
+
+    if (!tripsFiltered.length) {
+      setLoading(false);
+      document.getElementById('btn-buscar').disabled = false;
+      mostrarErro('Nenhuma viagem encontrada.');
+      return;
+    }
+
+    // 4. Dados de sinal
+    const sinaisMap = {};
+    if (diagIdUsado) {
+      setLoading(true, 'Buscando sinal...');
+      const sinais = await apiCall('Get', {
+        typeName: 'StatusData',
+        search: {
+          diagnosticSearch: { id: diagIdUsado },
+          fromDate: fromISO,
+          toDate: toISO,
+          deviceSearch: veicId ? { id: veicId } : {}
+        },
+        resultsLimit: 50000
+      }).catch(() => []);
+      sinais.forEach(s => {
+        const id = s.device?.id;
+        if (!id) return;
+        if (!sinaisMap[id]) sinaisMap[id] = [];
+        sinaisMap[id].push({ t: s.dateTime, v: s.data });
+      });
+    }
+
+    // 5. Rotas via GetTripPath
+    const rotasMap = {};
+    for (let i = 0; i < tripsFiltered.length; i++) {
+      const trip = tripsFiltered[i];
+      setLoading(true, `Rota ${i+1}/${tripsFiltered.length}...`);
+      try {
+        const path = await apiCall('GetTripPath', { id: trip.id, fromDate: trip.start, toDate: trip.stop });
+        if (path && path.length > 0) {
+          rotasMap[trip.id] = path.map(p => [p.y, p.x, null, p.dateTime || trip.start]);
+        }
+      } catch(e) {
+        try {
+          const logs = await apiCall('Get', {
+            typeName: 'LogRecord',
+            search: { fromDate: trip.start, toDate: trip.stop, deviceSearch: { id: trip.device?.id } },
+            resultsLimit: 10000
+          });
+          rotasMap[trip.id] = (logs||[]).map(l => [l.latitude, l.longitude, null, l.dateTime]);
+        } catch(e2) { rotasMap[trip.id] = []; }
+      }
+    }
+
+    // 6. Montar estrutura
+    setLoading(true, 'Processando...');
+    const vehicleMap = {};
+    tripsFiltered.forEach(trip => {
+      const did = trip.device?.id;
+      if (!did || !deviceMap[did]) return;
+      if (!vehicleMap[did]) vehicleMap[did] = { id: did, name: deviceMap[did].name || did, trips: [] };
+
+      const route = rotasMap[trip.id] || [];
+      const sinais = sinaisMap[did] || [];
+
+      route.forEach((pt, idx) => {
+        if (!sinais.length) return;
+        const ptTime = new Date(pt[3]).getTime();
+        let bestSig = null, bestDt = Infinity;
+        sinais.forEach(s => {
+          const dt = Math.abs(new Date(s.t).getTime() - ptTime);
+          if (dt < bestDt) { bestDt = dt; bestSig = s.v; }
+        });
+        route[idx][2] = bestSig;
+      });
+
+      const sigVals = route.map(p => p[2]).filter(v => v !== null && v !== undefined && v !== 255);
+      const sig = {
+        avg: sigVals.length ? Math.round(sigVals.reduce((a,b)=>a+b,0)/sigVals.length) : null,
+        min: sigVals.length ? Math.min(...sigVals) : null,
+        max: sigVals.length ? Math.max(...sigVals) : null,
+        total: route.length,
+        noSig: route.filter(p => p[2] === 255 || p[2] === null).length
+      };
+
+      vehicleMap[did].trips.push({
+        id: trip.id,
+        start: trip.start, stop: trip.stop,
+        dist: trip.distance ? (trip.distance/1000).toFixed(1) : '–',
+        dur: formatDur((new Date(trip.stop)-new Date(trip.start))/60000),
+        maxSpd: trip.maximumSpeed ? Math.round(trip.maximumSpeed*3.6) : '–',
+        avgSpd: trip.averageSpeed ? Math.round(trip.averageSpeed*3.6) : '–',
+        route, sig
+      });
+    });
+
+    veiculosData = Object.values(vehicleMap).sort((a,b) => a.name.localeCompare(b.name));
+    veiculosData.forEach(v => v.trips.sort((a,b) => new Date(a.start)-new Date(b.start)));
+
+    // 7. Desenhar todas as rotas no mapa com cor neutra
+    veiculosData.forEach(v => {
+      v.trips.forEach(t => desenharRota(t.route, '#7c83f7'));
+    });
+
+    // Centralizar no mapa
+    const todasRotas = veiculosData.flatMap(v => v.trips.flatMap(t => t.route));
+    centralizarRota(todasRotas);
+
+    atualizarKPIs();
+    renderLista();
+
+    const label = veicId ? (deviceMap[veicId]?.name || veicId) : 'Todos os veículos';
+    document.getElementById('sub-info').textContent =
+      `${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')} · ${label}`;
+
+    if (!diagIdUsado) mostrarErro('Sem dados de sinal nesta base — exibindo apenas rotas.');
+
+    setLoading(false);
+    document.getElementById('btn-buscar').disabled = false;
+
+  } catch(err) {
+    setLoading(false);
+    document.getElementById('btn-buscar').disabled = false;
+    mostrarErro('Erro: ' + (err.message || err));
+    console.error(err);
+  }
+}
+
+// ─── KPIs ──────────────────────────────────────────────────────────────────────
+function atualizarKPIs() {
+  const totalVeic  = veiculosData.length;
+  const totalTrips = veiculosData.reduce((s,v) => s+v.trips.length, 0);
+  const totalDist  = veiculosData.reduce((s,v) => s+v.trips.reduce((ss,t)=>ss+(parseFloat(t.dist)||0),0),0);
+  const allSig     = veiculosData.flatMap(v => v.trips.flatMap(t => t.sig.avg!==null?[t.sig.avg]:[]));
+  const avgSig     = allSig.length ? Math.round(allSig.reduce((a,b)=>a+b,0)/allSig.length) : null;
+  document.getElementById('st-veic').textContent  = totalVeic;
+  document.getElementById('st-trips').textContent = totalTrips;
+  document.getElementById('st-dist').textContent  = totalDist.toFixed(0);
+  document.getElementById('st-sig').textContent   = avgSig !== null ? avgSig+' ASU' : '–';
+}
+
+// ─── Lista lateral ─────────────────────────────────────────────────────────────
+function renderLista() {
+  const el = document.getElementById('trips-list');
+  if (!veiculosData.length) { el.innerHTML = '<div class="list-empty">Nenhum veículo.</div>'; return; }
+  el.innerHTML = veiculosData.map(v => `
+    <div class="vehicle-group">
+      <div class="vehicle-header${v.id===activeVehicleId?' active':''}" onclick="selectVehicle('${v.id}')">
+        <div>
+          <div class="vehicle-name">${v.name}</div>
+          <div class="vehicle-sub">${v.trips.length} viagem${v.trips.length!==1?'s':''}</div>
+        </div>
+        <span style="color:#7c83f7;font-size:10px">▶</span>
+      </div>
+      ${v.id===activeVehicleId ? v.trips.map((t,i) => `
+        <div class="trip-item${activeTripIdx===i?' active':''}" onclick="selectTrip('${v.id}',${i})">
+          <div class="trip-row">
+            <span>${fmtTime(t.start)}</span>
+            <span style="color:${sigColor(t.sig.avg)}">${t.sig.avg!==null?t.sig.avg+' ASU':'–'}</span>
+          </div>
+          <div class="trip-row">
+            <span class="trip-time">${t.dist} km · ${t.dur}</span>
+            <span class="trip-time">${t.maxSpd} km/h</span>
+          </div>
+          <div class="sig-bar">
+            <div class="sig-bar-inner" style="width:${t.sig.avg!==null?Math.min(100,(t.sig.avg/120)*100):0}%;background:${sigColor(t.sig.avg)}"></div>
+          </div>
+        </div>
+      `).join('') : ''}
+    </div>
+  `).join('');
+}
+
+function selectVehicle(vehicleId) {
+  const v = veiculosData.find(x => x.id===vehicleId);
+  if (!v) return;
+  if (activeVehicleId===vehicleId) {
+    activeVehicleId=null; activeTripIdx=null;
+  } else {
+    activeVehicleId=vehicleId; activeTripIdx=null;
+    // Redesenha todas as rotas destacando este veículo
+    limpar();
+    veiculosData.forEach(vv => {
+      const cor = vv.id===vehicleId ? '#7c83f7' : '#2d3148';
+      vv.trips.forEach(t => desenharRota(t.route, cor));
+    });
+    centralizarRota(v.trips.flatMap(t => t.route));
+  }
+  renderLista();
+}
+
+function selectTrip(vehicleId, tripIdx) {
+  const v = veiculosData.find(x => x.id===vehicleId);
+  if (!v) return;
+  activeVehicleId=vehicleId; activeTripIdx=tripIdx;
+  const trip = v.trips[tripIdx];
+  // Redesenha só esta viagem em destaque
+  limpar();
+  veiculosData.forEach(vv => {
+    vv.trips.forEach((t,i) => {
+      const destaque = vv.id===vehicleId && i===tripIdx;
+      const cor = destaque ? '#7c83f7' : '#2d3148';
+      desenharRota(t.route, cor);
+    });
+  });
+  centralizarRota(trip.route);
+  renderLista();
+}
+
+// ─── UI helpers ────────────────────────────────────────────────────────────────
+function setLoading(show,msg){ const el=document.getElementById('loading'); el.className=show?'loading show':'loading'; if(msg) document.getElementById('loading-msg').textContent=msg; }
+function mostrarErro(msg){ const el=document.getElementById('error-bar'); el.textContent=msg; el.className='error-bar show'; }
+function esconderErro(){ document.getElementById('error-bar').className='error-bar'; }
+
+// ─── Registro Map Add-In ───────────────────────────────────────────────────────
+// Map Add-Ins usam a assinatura: geotab.addin[name] = function(elt, services)
+var geotab = geotab || {};
+geotab.addin = geotab.addin || {};
+geotab.addin.sinalModemMapa = function(elt, services) {
+  svc = services;
+  initDatas();
+  popularVeiculos();
+};
+
+window.addEventListener('load', function() {
+  initDatas();
+});
+</script>
+</body>
+</html>
