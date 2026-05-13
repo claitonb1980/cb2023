@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinal Modem Celular</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{background:#0f1117;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+.header{background:#1a1d2e;border-bottom:1px solid #2d3148;padding:10px 16px;display:flex;align-items:center;gap:16px;flex-shrink:0;flex-wrap:wrap}
+.header h1{font-size:15px;font-weight:700;color:#7c83f7;white-space:nowrap}
+.header .sub{font-size:11px;color:#64748b}
+.stats{display:flex;gap:12px;margin-left:auto}
+.stat{text-align:center}
+.stat .val{font-size:18px;font-weight:700;color:#38bdf8}
+.stat .lbl{font-size:10px;color:#64748b;text-transform:uppercase}
+
+.toolbar{background:#131520;border-bottom:1px solid #2d3148;padding:8px 14px;display:flex;align-items:flex-end;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.tb-group{display:flex;flex-direction:column;gap:3px}
+.tb-label{font-size:10px;color:#64748b;text-transform:uppercase}
+select,input[type=date],input[type=text]{background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;padding:6px 8px;border-radius:6px;font-size:12px}
+select:focus,input:focus{outline:none;border-color:#7c83f7}
+.btn{padding:7px 16px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:background 0.2s}
+.btn-primary{background:#7c83f7;color:#fff}
+.btn-primary:hover{background:#6366f1}
+.btn-primary:disabled{background:#2d3148;color:#64748b;cursor:not-allowed}
+
+.loading{display:none;align-items:center;gap:8px;font-size:12px;color:#7c83f7}
+.loading.show{display:flex}
+.spinner{width:16px;height:16px;border:2px solid #2d3148;border-top-color:#7c83f7;border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-bar{display:none;background:#7f1d1d;border-bottom:1px solid #ef4444;padding:6px 14px;font-size:12px;color:#fca5a5}
+.error-bar.show{display:block}
+
+.main{display:flex;flex:1;overflow:hidden}
+
+.sidebar{width:280px;flex-shrink:0;background:#1a1d2e;border-right:1px solid #2d3148;display:flex;flex-direction:column;overflow:hidden}
+.sidebar-top{padding:8px 10px;border-bottom:1px solid #2d3148}
+.filter-label{font-size:10px;color:#64748b;text-transform:uppercase;margin-bottom:4px}
+.filter-row{margin-bottom:6px}
+.trips-list{flex:1;overflow-y:auto;padding:6px}
+.list-empty{color:#64748b;font-size:12px;text-align:center;padding:30px 10px;line-height:1.6}
+
+.vehicle-group{margin-bottom:6px}
+.vehicle-header{background:#252844;border-radius:6px;padding:8px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:12px;border-left:3px solid transparent;transition:all 0.2s;user-select:none}
+.vehicle-header:hover{background:#2d3148}
+.vehicle-header.active{border-left-color:#7c83f7;background:#2d3148}
+.vehicle-name{font-weight:700;color:#e2e8f0}
+.vehicle-sub{font-size:10px;color:#64748b}
+.trip-count{font-size:10px;color:#7c83f7;font-weight:600}
+
+.trip-item{margin:3px 0 3px 6px;padding:7px 10px;background:#0f1117;border-radius:5px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;font-size:11px}
+.trip-item:hover{border-color:#7c83f7;background:#1a1d2e}
+.trip-item.active{border-color:#7c83f7;background:#1a1d2e}
+.trip-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.trip-time{color:#94a3b8;font-size:10px}
+.signal-bar{height:5px;border-radius:3px;margin-top:4px;background:#1a1d2e}
+.signal-bar-inner{height:100%;border-radius:3px;transition:width 0.3s}
+
+.map-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+#map{flex:1}
+
+.info-panel{background:#1a1d2e;border-top:1px solid #2d3148;padding:10px 14px;height:150px;overflow-y:auto;flex-shrink:0}
+.info-panel h3{font-size:12px;color:#7c83f7;margin-bottom:8px}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}
+.info-card{background:#0f1117;border-radius:6px;padding:7px 10px;border:1px solid #2d3148}
+.info-card .ic-lbl{font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:2px}
+.info-card .ic-val{font-size:14px;font-weight:600;color:#e2e8f0}
+.info-placeholder{color:#64748b;font-size:12px;text-align:center;padding:20px 0}
+
+.legend{position:absolute;bottom:10px;right:10px;z-index:1000;background:rgba(26,29,46,0.95);border:1px solid #2d3148;border-radius:8px;padding:10px 12px;font-size:11px;min-width:150px;backdrop-filter:blur(4px)}
+.legend h4{color:#7c83f7;margin-bottom:6px;font-size:11px;font-weight:700}
+.leg-row{display:flex;align-items:center;gap:7px;margin:3px 0;color:#cbd5e1}
+.leg-swatch{width:20px;height:4px;border-radius:2px;flex-shrink:0}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#0f1117}
+::-webkit-scrollbar-thumb{background:#2d3148;border-radius:2px}
+
+.leaflet-popup-content-wrapper{background:#1a1d2e!important;color:#e2e8f0!important;border:1px solid #2d3148!important;border-radius:8px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important}
+.leaflet-popup-tip{background:#1a1d2e!important}
+.leaflet-popup-content{font-size:11px!important;line-height:1.6!important;margin:10px 12px!important}
+.popup-sig{font-weight:700;font-size:16px;margin-bottom:2px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header h1">Sinal Modem Celular</div>
+    <div class="sub" id="sub-periodo">Selecione o período e clique em Buscar</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="val" id="st-veic">–</div><div class="lbl">Veículos</div></div>
+    <div class="stat"><div class="val" id="st-trips">–</div><div class="lbl">Viagens</div></div>
+    <div class="stat"><div class="val" id="st-dist">–</div><div class="lbl">km Total</div></div>
+    <div class="stat"><div class="val" id="st-sig">–</div><div class="lbl">Sinal Médio</div></div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="tb-group">
+    <span class="tb-label">De</span>
+    <input type="date" id="dt-from"/>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Até</span>
+    <input type="date" id="dt-to"/>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Veículo</span>
+    <select id="sel-veiculo" style="min-width:180px">
+      <option value="">Todos os veículos</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" id="btn-buscar" onclick="buscar()">Buscar</button>
+  <div class="loading" id="loading"><div class="spinner"></div><span id="loading-msg">Carregando...</span></div>
+</div>
+
+<div class="error-bar" id="error-bar"></div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="filter-label">Buscar veículo</div>
+      <div class="filter-row">
+        <input type="text" id="inp-veiculo" placeholder="Nome do veículo..." oninput="filtrarLista()"/>
+      </div>
+    </div>
+    <div class="trips-list" id="trips-list">
+      <div class="list-empty">Configure o período e clique em <strong>Buscar</strong>.</div>
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="legend">
+      <h4>Sinal Modem Celular</h4>
+      <div class="leg-row"><div class="leg-swatch" style="background:#22c55e"></div><span>Excelente (&gt;100 ASU)</span></div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#84cc16"></div><span>Bom (85–100 ASU)</span></div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#f59e0b"></div><span>Regular (65–84 ASU)</span></div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#ef4444"></div><span>Fraco (&lt;65 ASU)</span></div>
+      <div class="leg-row"><div class="leg-swatch" style="background:#475569"></div><span>Sem sinal</span></div>
+    </div>
+    <div class="info-panel" id="info-panel">
+      <div class="info-placeholder">Selecione um veículo ou viagem para ver detalhes</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── Diagnostic IDs padrão Geotab para sinal de modem ─────────────────────────
+// Tentamos os IDs padrão primeiro; se não retornar dados, buscamos os custom
+const DIAG_IDS_SINAL = [
+  'DiagnosticModemCellularSignalStrengthId',
+  'DiagnosticNetworkSignalStrengthId',
+  'a4Cq3dWtCV0yoo9j_v__LbQ'  // custom Forttis (fallback)
+];
+
+// ─── Estado global ─────────────────────────────────────────────────────────────
+let geotabApi = null;
+let veiculosData = [];
+let layers = [];
+let activeVehicleId = null;
+let activeTripIdx = null;
+let diagIdUsado = null;
+
+// ─── Mapa ──────────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([-15.0, -50.0], 5);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Esri', maxZoom: 19
+}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '', maxZoom: 19, opacity: 0.7
+}).addTo(map);
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function sigColor(v) {
+  if (v === null || v === undefined) return '#475569';
+  if (v === 255) return '#475569';
+  if (v > 100)  return '#22c55e';
+  if (v >= 85)  return '#84cc16';
+  if (v >= 65)  return '#f59e0b';
+  return '#ef4444';
+}
+function sigLabel(v) {
+  if (v === null || v === undefined || v === 255) return 'Sem sinal';
+  if (v > 100) return 'Excelente';
+  if (v >= 85) return 'Bom';
+  if (v >= 65) return 'Regular';
+  return 'Fraco';
+}
+function fmtTime(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'});
+}
+function fmtTimeShort(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleTimeString('pt-BR', {timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit'});
+}
+function formatDur(mins) {
+  if (!mins || mins < 0) return '–';
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m`;
+}
+function apiCall(method, params) {
+  return new Promise((resolve, reject) => geotabApi.call(method, params, resolve, reject));
+}
+
+// ─── Datas padrão (últimos 7 dias) ────────────────────────────────────────────
+function initDatas() {
+  const hoje = new Date();
+  const semana = new Date(hoje); semana.setDate(hoje.getDate() - 7);
+  document.getElementById('dt-to').value   = hoje.toISOString().slice(0,10);
+  document.getElementById('dt-from').value = semana.toISOString().slice(0,10);
+}
+
+// ─── Inicialização Add-In ──────────────────────────────────────────────────────
+function initAddin() {
+  initDatas();
+  if (typeof geotab !== 'undefined') {
+    geotab.addin.sinalModemDemo = function(freshApi) {
+      geotabApi = freshApi;
+      popularVeiculos();
+    };
+  } else {
+    mostrarErro('Execute este dashboard como Add-In dentro do MyGeotab.');
+    document.getElementById('btn-buscar').disabled = true;
+  }
+}
+
+// ─── Popular dropdown veículos ─────────────────────────────────────────────────
+function popularVeiculos() {
+  apiCall('Get', { typeName: 'Device', search: {}, resultsLimit: 1000 })
+    .then(devices => {
+      const sel = document.getElementById('sel-veiculo');
+      sel.innerHTML = '<option value="">Todos os veículos</option>';
+      devices.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.name || d.id;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(() => {});
+}
+
+// ─── Descobrir qual Diagnostic ID tem dados nesta base ─────────────────────────
+async function descobrirDiagId(fromISO, toISO, deviceId) {
+  for (const diagId of DIAG_IDS_SINAL) {
+    try {
+      const search = {
+        diagnosticSearch: { id: diagId },
+        fromDate: fromISO,
+        toDate: toISO,
+        resultsLimit: 1
+      };
+      if (deviceId) search.deviceSearch = { id: deviceId };
+      const res = await apiCall('Get', { typeName: 'StatusData', search });
+      if (res && res.length > 0) return diagId;
+    } catch(e) {}
+  }
+  return null;
+}
+
+// ─── Busca principal ───────────────────────────────────────────────────────────
+async function buscar() {
+  if (!geotabApi) { mostrarErro('API Geotab não disponível.'); return; }
+
+  const from  = document.getElementById('dt-from').value;
+  const to    = document.getElementById('dt-to').value;
+  const veicId = document.getElementById('sel-veiculo').value;
+
+  if (!from || !to) { mostrarErro('Selecione o período.'); return; }
+
+  const fromISO = from + 'T03:00:00Z';
+  const toDate  = new Date(to); toDate.setDate(toDate.getDate() + 1);
+  const toISO   = toDate.toISOString().slice(0,19) + 'Z';
+
+  esconderErro();
+  setLoading(true, 'Buscando veículos...');
+  document.getElementById('btn-buscar').disabled = true;
+  veiculosData = [];
+
+  try {
+    // 1. Devices
+    const devSearch = veicId ? { id: veicId } : {};
+    const devices = await apiCall('Get', { typeName: 'Device', search: devSearch, resultsLimit: 500 });
+    const deviceMap = {};
+    devices.forEach(d => { deviceMap[d.id] = d; });
+    const deviceIds = devices.map(d => d.id);
+
+    // 2. Descobrir qual diagnostic ID tem dados nessa base
+    setLoading(true, 'Identificando parâmetros de sinal...');
+    diagIdUsado = await descobrirDiagId(fromISO, toISO, deviceIds[0]);
+
+    // 3. Viagens
+    setLoading(true, 'Buscando viagens...');
+    const tripSearch = { fromDate: fromISO, toDate: toISO };
+    if (veicId) tripSearch.deviceSearch = { id: veicId };
+    const trips = await apiCall('Get', { typeName: 'Trip', search: tripSearch, resultsLimit: 5000 });
+
+    const deviceIdSet = new Set(deviceIds);
+    const tripsFiltered = trips.filter(t => deviceIdSet.has(t.device?.id));
+
+    if (!tripsFiltered.length) {
+      setLoading(false);
+      document.getElementById('btn-buscar').disabled = false;
+      mostrarErro('Nenhuma viagem encontrada para o período selecionado.');
+      return;
+    }
+
+    // 4. Sinal (se houver diagnostic ID)
+    const sinaisMap = {};
+    if (diagIdUsado) {
+      setLoading(true, 'Buscando dados de sinal...');
+      const sinais = await apiCall('Get', {
+        typeName: 'StatusData',
+        search: {
+          diagnosticSearch: { id: diagIdUsado },
+          fromDate: fromISO,
+          toDate: toISO,
+          deviceSearch: veicId ? { id: veicId } : {}
+        },
+        resultsLimit: 50000
+      }).catch(() => []);
+      sinais.forEach(s => {
+        const id = s.device?.id;
+        if (!id) return;
+        if (!sinaisMap[id]) sinaisMap[id] = [];
+        sinaisMap[id].push({ t: s.dateTime, v: s.data });
+      });
+    }
+
+    // 5. Rotas GPS por device
+    const tripsByDevice = {};
+    tripsFiltered.forEach(t => {
+      const did = t.device?.id;
+      if (!tripsByDevice[did]) tripsByDevice[did] = [];
+      tripsByDevice[did].push(t);
+    });
+
+    const rotasMap = {};
+    const devEntries = Object.entries(tripsByDevice);
+    for (let i = 0; i < devEntries.length; i++) {
+      const [did, devTrips] = devEntries[i];
+      setLoading(true, `GPS: ${i+1}/${devEntries.length} veículos...`);
+      const logs = await apiCall('Get', {
+        typeName: 'LogRecord',
+        search: { fromDate: fromISO, toDate: toISO, deviceSearch: { id: did } },
+        resultsLimit: 50000
+      }).catch(() => []);
+
+      devTrips.forEach(trip => {
+        const tStart = new Date(trip.start).getTime();
+        const tStop  = new Date(trip.stop).getTime();
+        rotasMap[trip.id] = logs
+          .filter(l => { const lt = new Date(l.dateTime).getTime(); return lt >= tStart && lt <= tStop; })
+          .map(l => [l.latitude, l.longitude, null, l.dateTime]);
+      });
+    }
+
+    // 6. Montar estrutura final
+    setLoading(true, 'Processando...');
+    const vehicleMap = {};
+
+    tripsFiltered.forEach(trip => {
+      const did = trip.device?.id;
+      if (!did || !deviceMap[did]) return;
+      if (!vehicleMap[did]) vehicleMap[did] = { id: did, name: deviceMap[did].name || did, trips: [] };
+
+      const route = rotasMap[trip.id] || [];
+      const sinais = sinaisMap[did] || [];
+
+      // Enriquecer rota com sinal mais próximo
+      route.forEach((pt, idx) => {
+        if (!sinais.length) return;
+        const ptTime = new Date(pt[3]).getTime();
+        let bestSig = null, bestDt = Infinity;
+        sinais.forEach(s => {
+          const dt = Math.abs(new Date(s.t).getTime() - ptTime);
+          if (dt < bestDt) { bestDt = dt; bestSig = s.v; }
+        });
+        route[idx][2] = bestSig;
+      });
+
+      const sigVals = route.map(p => p[2]).filter(v => v !== null && v !== undefined && v !== 255);
+      const sig = {
+        avg: sigVals.length ? Math.round(sigVals.reduce((a,b)=>a+b,0)/sigVals.length) : null,
+        min: sigVals.length ? Math.min(...sigVals) : null,
+        max: sigVals.length ? Math.max(...sigVals) : null,
+        total: route.length,
+        noSig: route.filter(p => p[2] === 255 || p[2] === null).length
+      };
+
+      const distKm = trip.distance ? (trip.distance/1000).toFixed(1) : '–';
+      const dur = trip.start && trip.stop ? formatDur((new Date(trip.stop)-new Date(trip.start))/60000) : '–';
+      const maxSpd = trip.maximumSpeed ? Math.round(trip.maximumSpeed*3.6) : '–';
+      const avgSpd = trip.averageSpeed ? Math.round(trip.averageSpeed*3.6) : '–';
+
+      vehicleMap[did].trips.push({ id: trip.id, start: trip.start, stop: trip.stop, dist: distKm, dur, maxSpd, avgSpd, route, sig });
+    });
+
+    veiculosData = Object.values(vehicleMap).sort((a,b) => a.name.localeCompare(b.name));
+    veiculosData.forEach(v => v.trips.sort((a,b) => new Date(a.start)-new Date(b.start)));
+
+    atualizarKPIs();
+    renderLista();
+
+    const label = veicId ? (deviceMap[veicId]?.name || veicId) : 'Todos os veículos';
+    document.getElementById('sub-periodo').textContent =
+      `${from.split('-').reverse().join('/')} a ${to.split('-').reverse().join('/')} · ${label}` +
+      (diagIdUsado ? '' : ' · Sem dados de sinal nesta base');
+
+    if (!diagIdUsado) mostrarErro('Dados de sinal de modem não encontrados nesta base. Apenas rotas serão exibidas.');
+
+    setLoading(false);
+    document.getElementById('btn-buscar').disabled = false;
+
+  } catch(err) {
+    setLoading(false);
+    document.getElementById('btn-buscar').disabled = false;
+    mostrarErro('Erro: ' + (err.message || err));
+    console.error(err);
+  }
+}
+
+// ─── KPIs ──────────────────────────────────────────────────────────────────────
+function atualizarKPIs() {
+  const totalVeic  = veiculosData.length;
+  const totalTrips = veiculosData.reduce((s,v) => s+v.trips.length, 0);
+  const totalDist  = veiculosData.reduce((s,v) => s+v.trips.reduce((ss,t) => ss+(parseFloat(t.dist)||0),0), 0);
+  const allSig     = veiculosData.flatMap(v => v.trips.flatMap(t => t.sig.avg!==null?[t.sig.avg]:[]));
+  const avgSig     = allSig.length ? Math.round(allSig.reduce((a,b)=>a+b,0)/allSig.length) : null;
+  document.getElementById('st-veic').textContent  = totalVeic;
+  document.getElementById('st-trips').textContent = totalTrips;
+  document.getElementById('st-dist').textContent  = totalDist.toFixed(0);
+  document.getElementById('st-sig').textContent   = avgSig !== null ? avgSig+' ASU' : '–';
+}
+
+// ─── Lista lateral ─────────────────────────────────────────────────────────────
+function filtrarLista() {
+  const q = document.getElementById('inp-veiculo').value.toLowerCase();
+  renderLista(q ? veiculosData.filter(v => v.name.toLowerCase().includes(q)) : veiculosData);
+}
+
+function renderLista(dados) {
+  dados = dados || veiculosData;
+  const el = document.getElementById('trips-list');
+  if (!dados.length) { el.innerHTML = '<div class="list-empty">Nenhum veículo encontrado.</div>'; return; }
+  el.innerHTML = dados.map(v => `
+    <div class="vehicle-group">
+      <div class="vehicle-header${v.id===activeVehicleId?' active':''}" onclick="selectVehicle('${v.id}')">
+        <div>
+          <div class="vehicle-name">${v.name}</div>
+          <div class="vehicle-sub">${v.trips.length} viagem${v.trips.length!==1?'s':''}</div>
+        </div>
+        <span class="trip-count">▶</span>
+      </div>
+      ${v.id===activeVehicleId ? v.trips.map((t,i) => `
+        <div class="trip-item${activeTripIdx===i?' active':''}" onclick="selectTrip('${v.id}',${i})">
+          <div class="trip-row">
+            <span>${fmtTime(t.start)}</span>
+            <span style="color:${sigColor(t.sig.avg)}">${t.sig.avg!==null?t.sig.avg+' ASU':'–'}</span>
+          </div>
+          <div class="trip-row">
+            <span class="trip-time">${t.dist} km · ${t.dur}</span>
+            <span class="trip-time">${t.maxSpd} km/h</span>
+          </div>
+          <div class="signal-bar">
+            <div class="signal-bar-inner" style="width:${t.sig.avg!==null?Math.min(100,(t.sig.avg/120)*100):0}%;background:${sigColor(t.sig.avg)}"></div>
+          </div>
+        </div>
+      `).join('') : ''}
+    </div>
+  `).join('');
+}
+
+// ─── Seleção ───────────────────────────────────────────────────────────────────
+function selectVehicle(vehicleId) {
+  const v = veiculosData.find(x => x.id===vehicleId);
+  if (!v) return;
+  if (activeVehicleId===vehicleId) { activeVehicleId=null; activeTripIdx=null; }
+  else { activeVehicleId=vehicleId; activeTripIdx=null; drawVehicleAllTrips(v); }
+  renderLista();
+}
+function selectTrip(vehicleId, tripIdx) {
+  const v = veiculosData.find(x => x.id===vehicleId);
+  if (!v) return;
+  activeVehicleId=vehicleId; activeTripIdx=tripIdx;
+  drawTrip(v, v.trips[tripIdx]);
+  renderLista();
+}
+
+// ─── Mapa ──────────────────────────────────────────────────────────────────────
+function clearLayers() { layers.forEach(l => map.removeLayer(l)); layers=[]; }
+
+function drawTrip(vehicle, trip) {
+  clearLayers();
+  if (!trip.route || !trip.route.length) { showTripInfo(vehicle, trip); return; }
+  for (let i=0; i<trip.route.length-1; i++) {
+    const p1=trip.route[i], p2=trip.route[i+1];
+    const pl = L.polyline([[p1[0],p1[1]],[p2[0],p2[1]]], { color:sigColor(p1[2]), weight:5, opacity:0.9 }).addTo(map);
+    pl.bindPopup(
+      '<div class="popup-sig" style="color:'+sigColor(p1[2])+'">'+(p1[2]===255?'Sem sinal':p1[2]!==null?p1[2]+' ASU':'–')+'</div>'+
+      '<div style="color:#94a3b8">'+sigLabel(p1[2])+'</div>'+
+      '<div style="color:#64748b;margin-top:4px">'+fmtTimeShort(p1[3])+'</div>'
+    );
+    layers.push(pl);
+  }
+  const first=trip.route[0], last=trip.route[trip.route.length-1];
+  const sm=L.circleMarker([first[0],first[1]],{radius:8,color:'#fff',fillColor:'#22c55e',fillOpacity:1,weight:2}).addTo(map);
+  sm.bindPopup('<b>Início</b><br>'+fmtTime(trip.start)); layers.push(sm);
+  const em=L.circleMarker([last[0],last[1]],{radius:8,color:'#fff',fillColor:'#ef4444',fillOpacity:1,weight:2}).addTo(map);
+  em.bindPopup('<b>Fim</b><br>'+fmtTime(trip.stop)); layers.push(em);
+  map.fitBounds(L.latLngBounds(trip.route.map(p=>[p[0],p[1]])),{padding:[30,30]});
+  showTripInfo(vehicle, trip);
+}
+
+function drawVehicleAllTrips(vehicle) {
+  clearLayers();
+  let all=[];
+  vehicle.trips.forEach(trip => {
+    if (!trip.route||!trip.route.length) return;
+    for (let i=0; i<trip.route.length-1; i++) {
+      const p1=trip.route[i], p2=trip.route[i+1];
+      const pl=L.polyline([[p1[0],p1[1]],[p2[0],p2[1]]],{color:sigColor(p1[2]),weight:3,opacity:0.75}).addTo(map);
+      const t=trip;
+      pl.on('click',()=>{ activeTripIdx=vehicle.trips.indexOf(t); drawTrip(vehicle,t); renderLista(); });
+      layers.push(pl);
+    }
+    trip.route.forEach(p=>all.push([p[0],p[1]]));
+  });
+  if (all.length) map.fitBounds(L.latLngBounds(all),{padding:[20,20]});
+  showVehicleInfo(vehicle);
+}
+
+// ─── Info panel ────────────────────────────────────────────────────────────────
+function card(lbl,val){ return '<div class="info-card"><div class="ic-lbl">'+lbl+'</div><div class="ic-val">'+val+'</div></div>'; }
+function cardColor(lbl,val,color){ return '<div class="info-card"><div class="ic-lbl">'+lbl+'</div><div class="ic-val" style="color:'+color+'">'+val+'</div></div>'; }
+
+function showTripInfo(v, trip) {
+  const s=trip.sig, noSigPct=s.total>0?((s.noSig/s.total)*100).toFixed(0):0;
+  document.getElementById('info-panel').innerHTML =
+    '<h3>'+v.name+' &nbsp;|&nbsp; '+fmtTime(trip.start)+' → '+fmtTimeShort(trip.stop)+'</h3>'+
+    '<div class="info-grid">'+
+    card('Distância',trip.dist+' km')+card('Duração',trip.dur)+
+    card('Vel. Máx.',trip.maxSpd+' km/h')+card('Vel. Média',trip.avgSpd+' km/h')+
+    (diagIdUsado ? cardColor('Sinal Médio',s.avg!==null?s.avg+' ASU':'–',sigColor(s.avg))+
+    cardColor('Sinal Mín.',s.min!==null?s.min:'–',sigColor(s.min))+
+    cardColor('Sinal Máx.',s.max!==null?s.max:'–',sigColor(s.max))+
+    cardColor('Sem Sinal',noSigPct+'%',noSigPct>20?'#ef4444':'#e2e8f0')+
+    card('Leituras',s.total) : card('Sinal','Não disponível'))+
+    '</div>';
+}
+
+function showVehicleInfo(v) {
+  const totalDist=v.trips.reduce((s,t)=>s+(parseFloat(t.dist)||0),0).toFixed(1);
+  const allSig=v.trips.flatMap(t=>t.sig.avg!==null?[t.sig.avg]:[]);
+  const avgSig=allSig.length?Math.round(allSig.reduce((a,b)=>a+b,0)/allSig.length):null;
+  const maxSpd=Math.max(...v.trips.map(t=>parseInt(t.maxSpd)||0));
+  document.getElementById('info-panel').innerHTML =
+    '<h3>'+v.name+' &nbsp;|&nbsp; '+v.trips.length+' viagens</h3>'+
+    '<div class="info-grid">'+
+    card('Total km',totalDist+' km')+card('Viagens',v.trips.length)+card('Vel. Máx.',maxSpd+' km/h')+
+    (diagIdUsado?cardColor('Sinal Médio',avgSig!==null?avgSig+' ASU':'–',sigColor(avgSig)):card('Sinal','Não disponível'))+
+    '</div>'+
+    '<div style="font-size:11px;color:#64748b;margin-top:8px">Clique em uma viagem para ver a rota.</div>';
+}
+
+// ─── UI helpers ────────────────────────────────────────────────────────────────
+function setLoading(show,msg){ const el=document.getElementById('loading'); el.className=show?'loading show':'loading'; if(msg) document.getElementById('loading-msg').textContent=msg; }
+function mostrarErro(msg){ const el=document.getElementById('error-bar'); el.textContent=msg; el.className='error-bar show'; }
+function esconderErro(){ document.getElementById('error-bar').className='error-bar'; }
+
+window.addEventListener('load', initAddin);
+</script>
+</body>
+</html>
