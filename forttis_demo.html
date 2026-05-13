@@ -223,7 +223,7 @@ function initDatas() {
 function initAddin() {
   initDatas();
   if (typeof geotab !== 'undefined') {
-    geotab.addin.sinalModemDemo = function(freshApi) {
+    geotab.addin.sinalModemDemoLink = function(freshApi, freshState) {
       geotabApi = freshApi;
       popularVeiculos();
     };
