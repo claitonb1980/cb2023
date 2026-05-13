@@ -351,32 +351,38 @@ async function buscar() {
       });
     }
 
-    // 5. Rotas GPS por device
-    const tripsByDevice = {};
-    tripsFiltered.forEach(t => {
-      const did = t.device?.id;
-      if (!tripsByDevice[did]) tripsByDevice[did] = [];
-      tripsByDevice[did].push(t);
-    });
-
+    // 5. Rotas GPS via GetTripPath (funciona em bases filhas onde LogRecord é bloqueado)
     const rotasMap = {};
-    const devEntries = Object.entries(tripsByDevice);
-    for (let i = 0; i < devEntries.length; i++) {
-      const [did, devTrips] = devEntries[i];
-      setLoading(true, `GPS: ${i+1}/${devEntries.length} veículos...`);
-      const logs = await apiCall('Get', {
-        typeName: 'LogRecord',
-        search: { fromDate: fromISO, toDate: toISO, deviceSearch: { id: did } },
-        resultsLimit: 50000
-      }).catch(() => []);
-
-      devTrips.forEach(trip => {
-        const tStart = new Date(trip.start).getTime();
-        const tStop  = new Date(trip.stop).getTime();
-        rotasMap[trip.id] = logs
-          .filter(l => { const lt = new Date(l.dateTime).getTime(); return lt >= tStart && lt <= tStop; })
-          .map(l => [l.latitude, l.longitude, null, l.dateTime]);
-      });
+    for (let i = 0; i < tripsFiltered.length; i++) {
+      const trip = tripsFiltered[i];
+      setLoading(true, `Rota: ${i+1}/${tripsFiltered.length} viagens...`);
+      try {
+        // Tenta GetTripPath primeiro
+        const path = await apiCall('GetTripPath', {
+          id: trip.id,
+          fromDate: trip.start,
+          toDate: trip.stop
+        });
+        if (path && path.length > 0) {
+          rotasMap[trip.id] = path.map(p => [p.y, p.x, null, p.dateTime || trip.start]);
+        }
+      } catch(e) {
+        // Fallback: LogRecord
+        try {
+          const logs = await apiCall('Get', {
+            typeName: 'LogRecord',
+            search: {
+              fromDate: trip.start,
+              toDate: trip.stop,
+              deviceSearch: { id: trip.device?.id }
+            },
+            resultsLimit: 10000
+          });
+          rotasMap[trip.id] = (logs||[]).map(l => [l.latitude, l.longitude, null, l.dateTime]);
+        } catch(e2) {
+          rotasMap[trip.id] = [];
+        }
+      }
     }
 
     // 6. Montar estrutura final
